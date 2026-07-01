@@ -1,0 +1,293 @@
+let distributionChart, rankingChart, trendChart;
+
+document.addEventListener('DOMContentLoaded', () => {
+    setDefaultDateRange();
+    loadAnalytics();
+});
+
+function setDefaultDateRange() {
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 30);
+
+    document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+    document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+}
+
+async function loadAnalytics() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    try {
+        // Load KPIs
+        loadKPIs(startDate, endDate);
+
+        // Load Metrics
+        loadMetrics(startDate, endDate);
+
+        // Load Ranking
+        loadRanking(startDate, endDate);
+
+        // Load Data Quality
+        loadDataQuality(startDate, endDate);
+
+        // Load User Activity
+        loadUserActivity(startDate, endDate);
+
+        // Load Breakdown
+        loadServiceBreakdown(startDate, endDate);
+
+        // Load Anomalies
+        loadAnomalies(startDate, endDate);
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+    }
+}
+
+async function loadKPIs(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/kpis?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const kpiSection = document.getElementById('kpiSection');
+            kpiSection.innerHTML = `
+                <div class="kpi-card">
+                    <h6>Total Records Submitted</h6>
+                    <div class="value">${result.kpis.totalRecordsSubmitted}</div>
+                </div>
+                <div class="kpi-card">
+                    <h6>Active Services</h6>
+                    <div class="value">${result.kpis.servicesActive}</div>
+                </div>
+                <div class="kpi-card">
+                    <h6>Total Users</h6>
+                    <div class="value">${result.kpis.totalUsers}</div>
+                </div>
+                <div class="kpi-card">
+                    <h6>Avg Records/Day</h6>
+                    <div class="value">${result.kpis.averageRecordsPerDay}</div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading KPIs:', error);
+    }
+}
+
+async function loadMetrics(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/metrics?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const metricsGrid = document.getElementById('metricsGrid');
+            metricsGrid.innerHTML = Object.keys(result.metrics).map(service => `
+                <div class="metric-card">
+                    <h5>${service}</h5>
+                    <div class="value">${result.metrics[service].totalRecords}</div>
+                    <div class="trend up">Records Per Day: ${result.metrics[service].recordsPerDay}</div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading metrics:', error);
+    }
+}
+
+async function loadRanking(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/ranking?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const rankingTable = document.getElementById('rankingTable');
+            rankingTable.innerHTML = result.rankings.map((rank, index) => {
+                let badgeClass = '';
+                if (rank.rank === 1) badgeClass = 'gold';
+                else if (rank.rank === 2) badgeClass = 'silver';
+                else if (rank.rank === 3) badgeClass = 'bronze';
+
+                return `
+                    <div class="ranking-item">
+                        <div>
+                            <strong>${rank.serviceName}</strong>
+                            <small class="text-muted"> (${rank.serviceCode})</small>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="ranking-badge ${badgeClass}">Rank #${rank.rank}</span>
+                            <div>${rank.totalRecords} records</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Create ranking chart
+            const rankingData = result.rankings.slice(0, 5);
+            createRankingChart(rankingData);
+        }
+    } catch (error) {
+        console.error('Error loading ranking:', error);
+    }
+}
+
+async function loadDataQuality(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/quality?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('totalRecords').textContent = result.metrics.totalRecords;
+            document.getElementById('completeness').textContent = result.metrics.dataCompleteness;
+            document.getElementById('recordsPerUser').textContent = result.metrics.recordsPerUser;
+            document.getElementById('recordsPerService').textContent = result.metrics.recordsPerService;
+        }
+    } catch (error) {
+        console.error('Error loading data quality:', error);
+    }
+}
+
+async function loadUserActivity(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/user-activity?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const table = document.getElementById('userActivityTable');
+            table.innerHTML = result.userActivity.slice(0, 10).map(user => `
+                <tr>
+                    <td><strong>${user.fullName}</strong><br><small>${user.email}</small></td>
+                    <td>${user.role}</td>
+                    <td>${user.recordsEntered}</td>
+                    <td>${user.activityCount}</td>
+                    <td>${user.lastActivity ? new Date(user.lastActivity).toLocaleDateString() : 'N/A'}</td>
+                </tr>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading user activity:', error);
+    }
+}
+
+async function loadServiceBreakdown(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/breakdown?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const table = document.getElementById('breakdownTable');
+            table.innerHTML = result.breakdown.map(service => `
+                <tr>
+                    <td><strong>${service.serviceName}</strong></td>
+                    <td>${service.serviceCode}</td>
+                    <td>${service.totalRecords}</td>
+                    <td>
+                        <div style="width: 60px; background: #e9ecef; height: 8px; border-radius: 4px;">
+                            <div style="width: ${service.percentage}%; background: #667eea; height: 100%; border-radius: 4px;"></div>
+                        </div>
+                        ${service.percentage}%
+                    </td>
+                    <td><span class="badge bg-success">${service.totalRecords > 100 ? 'Excellent' : 'Good'}</span></td>
+                </tr>
+            `).join('');
+
+            // Create distribution chart
+            createDistributionChart(result.breakdown);
+        }
+    } catch (error) {
+        console.error('Error loading breakdown:', error);
+    }
+}
+
+async function loadAnomalies(startDate, endDate) {
+    try {
+        const response = await fetch(`/api/analytics/anomalies?startDate=${startDate}&endDate=${endDate}`);
+        const result = await response.json();
+
+        if (result.success && result.anomalies.length > 0) {
+            const container = document.getElementById('anomaliesContainer');
+            container.innerHTML = result.anomalies.map(anomaly => `
+                <div class="anomaly-item ${anomaly.severity === 'High' ? 'high' : ''}">
+                    <strong>${anomaly.service}</strong> - ${new Date(anomaly.date).toLocaleDateString()}
+                    <br>
+                    <small>Deviation: <strong>${anomaly.percentageDeviation}%</strong> - Severity: <strong>${anomaly.severity}</strong></small>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading anomalies:', error);
+    }
+}
+
+function createDistributionChart(data) {
+    const ctx = document.getElementById('distributionChart').getContext('2d');
+    
+    if (distributionChart) distributionChart.destroy();
+
+    distributionChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.serviceName),
+            datasets: [{
+                data: data.map(d => d.totalRecords),
+                backgroundColor: [
+                    '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                    '#00f2fe', '#43e97b', '#fa709a', '#fee140'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+
+function createRankingChart(data) {
+    const ctx = document.getElementById('rankingChart').getContext('2d');
+    
+    if (rankingChart) rankingChart.destroy();
+
+    rankingChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.serviceName),
+            datasets: [{
+                label: 'Records Submitted',
+                data: data.map(d => d.totalRecords),
+                backgroundColor: '#667eea'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function exportAnalytics() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    fetch('/api/analytics/export-summary', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ startDate, endDate })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analytics-${startDate}-to-${endDate}.pdf`;
+        a.click();
+    })
+    .catch(error => console.error('Error exporting:', error));
+}
